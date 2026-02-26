@@ -1,6 +1,5 @@
-# WWHO — Unified Meta-Vocabulary Tokenizer
+# WWHO — Where-What-HowOften
 
-> **Project Status:** Active Development
 > **Documentation:** [docs/](docs/)
 
 WWHO is a **hybrid tokenization system** designed to solve the challenges of processing multilingual text that includes both high-resource Latin scripts and complex Indic scripts (like Sinhala and Devanagari) within a single Large Language Model (LLM).
