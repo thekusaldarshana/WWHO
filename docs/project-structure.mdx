@@ -1,0 +1,72 @@
+# Project Structure
+
+This document provides a detailed breakdown of the codebase organization and the responsibilities of key files.
+
+## Root Directory
+
+The project root contains the core logic and scripts for training, exporting, and running the tokenizer pipeline.
+
+*   `gpe_trainer.py`: The main script for training the BPE vocabulary. It handles corpus ingestion, multiprocessing pre-tokenization, and the core BPE merge loop.
+*   `encoder.py`: Contains the `SGPEEncoder` (for standalone Indic tokenization) and `WWHOMetaEncoder` (for the unified hybrid system). This is the primary inference module.
+*   `router.py`: Implements the `CodeSwitchSegmenter` logic. It splits input text into typed segments (Latin, Sinhala, Devanagari) and routes them to the correct tokenizer.
+*   `linguis_trie.py`: Despite the name, this implements a **DFA-based syllabic tokenizer**. It loads JSON schemas and tokenizes Indic text into linguistically valid syllables.
+*   `export.py`: Exports the trained vocabulary in Hugging Face compatible JSON format (`tokenizer.json`) and a custom meta-vocabulary format (`tokenizer_meta.json`).
+*   `orchestrator.py`: A CLI tool to manage the full pipeline: training, evaluation, exporting, and testing. It provides an interactive menu.
+
+## `schemas/` Directory
+
+This directory contains the linguistic rules for supported Indic scripts in JSON format. These schemas define the DFA transitions used by `linguis_trie.py`.
+
+*   `sinhala.json`: DFA rules for Sinhala script (U+0D80 block).
+*   `devanagari.json`: DFA rules for Devanagari script (U+0900 block).
+
+Each schema defines character classes (Consonants, Vowels, Signs, etc.) and valid transitions between them to form syllables.
+
+## `tests/` Directory
+
+Contains a comprehensive test suite (`battle.py`) covering various aspects of the tokenizer's performance and correctness.
+
+*   `battle.py`: The main test runner. It executes multiple "batteries" of tests.
+*   `battle_core.py`: Core logic for the test batteries, including linguistic complexity checks, glitched token detection, and round-trip consistency tests.
+*   `stratified_benchmark.py`: Benchmarks WWHO against other tokenizers (OpenAI, Llama 4, DeepSeek) using stratified sampling across languages.
+*   `orchestrator.py`: A test-specific orchestrator to run specific test batteries.
+
+## Key Files Explained
+
+### `router.py`
+
+This file is responsible for **Code-Switching Segmentation**.
+
+*   `Script` (Enum): Defines script types (`LATIN`, `SINHALA`, `DEVANAGARI`).
+*   `TextSegment` (Data Class): Represents a chunk of text with its associated script type and a `has_leading_space` flag.
+*   `CodeSwitchSegmenter`: The main class that iterates through characters and groups them by script. It handles complex edge cases like "leading space absorption" where a space after an English word is attached to the following Sinhala word.
+
+### `linguis_trie.py`
+
+This file implements the **DFA Syllable Tokenizer**.
+
+*   `LinguisTrie`: The tokenizer class. It's initialized with a schema dictionary.
+*   `tokenize(text)`: The core method. It walks the input text and transitions through DFA states. When an accept state is reached and no further transitions are possible, it emits a syllable token.
+*   It handles `[UNK]` token emission for characters not covered by the schema.
+
+### `gpe_trainer.py`
+
+This file implements the **BPE Training Algorithm**.
+
+*   `stream_and_count()`: Reads the corpus in chunks, pre-tokenizes using `LinguisTrie` (in parallel processes), and counts syllable frequencies.
+*   `build_word_types()`: Converts raw string counts into integer ID arrays for efficient processing.
+*   `train()`: The main loop. It calculates pair frequencies, finds the best pair to merge, updates the vocabulary, and repeats. It uses an inverted index (`token_index`) for fast updates.
+
+### `encoder.py`
+
+This file implements **Inference Logic**.
+
+*   `SGPEEncoder`: A pure SGPE tokenizer. It loads `vocab.json`, tokenizes text into syllables using `LinguisTrie`, and then applies the learned BPE merges.
+*   `WWHOMetaEncoder`: The hybrid tokenizer. It uses `router.CodeSwitchSegmenter` to split text. Latin segments go to `tiktoken`; Indic segments go to `SGPEEncoder` logic. Finally, it maps SGPE IDs to the unified meta-vocabulary space (offset by `tiktoken_size`).
+
+### `export.py`
+
+This file handles **Artifact Generation**.
+
+*   `export_hf_tokenizer()`: Creates a standard `tokenizer.json` that can be loaded by Hugging Face's `Tokenizers` library (for the Indic part).
+*   `export_meta_tokenizer()`: Creates `tokenizer_meta.json` which includes the offset logic and metadata required to reconstruct the full hybrid tokenizer.
