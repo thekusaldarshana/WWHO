@@ -1,10 +1,4 @@
-# WWHO — Unified Meta-Vocabulary Tokenizer
-### Architecture & Codebase Documentation
-
-> **Project Status:** Active Development  
-> **Stack:** Python, tiktoken, DFA-based syllabic tokenization, BPE  
-> **Target:** Multilingual LLM tokenization for Latin + Indic scripts (Sinhala, Devanagari)
-
+# WWHO — Where-What-HowOften
 ---
 
 ## Table of Contents
