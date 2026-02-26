@@ -1,0 +1,80 @@
+# Architecture
+
+This document outlines the high-level architecture, data flow, and core principles of the WWHO tokenization system.
+
+## High-Level Architecture
+
+The core of WWHO is the **CodeSwitchSegmenter**, which breaks input text into typed segments (Latin, Sinhala, Devanagari) before routing them to specialized tokenizers.
+
+```mermaid
+graph TD
+    A[Raw Text] --> B(CodeSwitchSegmenter)
+    B --> C{Script?}
+    C -- Latin --> D[tiktoken<br/>(o200k_base)]
+    C -- Indic (Sinhala/Devanagari) --> E[LinguisTrie DFA<br/>(Syllabic Tokenizer)]
+    E --> F[SGPE BPE Merges]
+    D --> G[Unified Meta-Vocabulary<br/>(ID Space)]
+    F --> G
+    G --> H[List of Token IDs]
+```
+
+## Data Flow
+
+### 1. Training Flow (Offline)
+
+1.  **Corpus Ingestion:** A large mixed-script corpus (JSONL format) is fed into the system.
+2.  **Pre-tokenization (`CodeSwitchSegmenter` + `LinguisTrie`):** Text is split into segments. Indic segments are further broken down into linguistically valid syllables using the DFA defined in `schemas/`.
+3.  **Word Counting:** Frequencies of all syllables and words are counted. Rare syllables below `prune_freq` are replaced with `[UNK]`.
+4.  **BPE Training (`gpe_trainer.py`):**
+    *   Initialize vocabulary with base syllables.
+    *   Iteratively merge the most frequent adjacent pair of tokens.
+    *   Update counts and repeat until the target vocabulary size (`vocab_size`) is reached or no more valid merges exist.
+5.  **Artifact Generation:** Output `vocab.json` (SGPE vocabulary and merge rules), `tokenizer.json` (HF format), and `tokenizer_meta.json` (Unified format).
+
+### 2. Inference Flow (Online)
+
+1.  **Input Text:** A string containing mixed English, Sinhala, and Hindi text.
+2.  **Segmentation:** `CodeSwitchSegmenter` splits the string:
+    *   "Hello " -> Latin
+    *   "ලංකාව" -> Sinhala
+    *   " and " -> Latin
+    *   "नमस्ते" -> Devanagari
+3.  **Tokenization:**
+    *   Latin segments are encoded directly by `tiktoken`.
+    *   Indic segments are passed to `LinguisTrie` for syllabification, then `SGPEEncoder` applies the learned BPE merges.
+4.  **ID Unification (`MetaVocab`):**
+    *   Tiktoken IDs are kept as-is (range `0` to `200,000`).
+    *   SGPE IDs are offset by `tiktoken_size` (range `200,000` to `200,000 + N`).
+5.  **Output:** A flat list of integers representing the tokenized sequence.
+
+## The Meta-Vocabulary ID Space
+
+The unique selling point of WWHO is its unified ID space, allowing a single embedding matrix to serve multiple scripts without interference.
+
+| ID Range | Content | Source |
+| :--- | :--- | :--- |
+| `0` - `199,999` | Latin script, Code, Digits, Emojis | `tiktoken` (o200k_base) |
+| `200,000` | SGPE Token ID 0 | `vocab.json` |
+| `200,001` | SGPE Token ID 1 | `vocab.json` |
+| ... | ... | ... |
+| `200,000 + N` | SGPE Token ID N | `vocab.json` |
+
+**Why this works:** The LLM treats all IDs as abstract indices. By segregating the ID spaces, we ensure that:
+1.  English/Code performance is identical to GPT-4o (since we reuse its tokenizer).
+2.  Indic performance is optimal (using our specialized syllabic tokenizer).
+3.  The model learns cross-lingual representations through context, not shared sub-tokens.
+
+## Core Principles
+
+### 1. Linguistic Integrity (The "What")
+We define **what** a valid token is using formal grammar (DFA). A token must be a syllable or a valid punctuation mark. BPE merges are only allowed to combine these valid units. This prevents "shattered" tokens where a consonant is separated from its vowel sign.
+
+### 2. Context-Aware Segmentation (The "Where")
+We define **where** to switch tokenizers. The `CodeSwitchSegmenter` handles the boundary between scripts, ensuring that spaces are handled correctly (e.g., absorbed into the following word where appropriate, mimicking SentencePiece behavior).
+
+### 3. Statistical Optimization (The "How Often")
+We use BPE to determine **how often** tokens should be merged. Frequent syllables are combined into words or sub-words, optimizing the vocabulary for the target corpus distribution.
+
+## Framework Compatibility
+
+While WWHO produces standard BPE artifacts for the Indic portion, the **Unified Meta-Vocabulary** requires a custom encoder wrapper (`WWHOMetaEncoder`) during inference because standard Hugging Face tokenizers do not support this hybrid "router + offset" logic out of the box. We provide an `export.py` script to generate a `tokenizer_meta.json` that serializes this configuration.
