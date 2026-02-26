@@ -74,7 +74,7 @@ class WWHOOrchestrator:
         table.add_row("3", "Export",
                       "export.py — WWHO HF tokenizer + unified meta-vocab")
         table.add_row("4", "Run Tests",
-                      "battle_v2.py — all 9 batteries (Sinhala + Devanagari + code-switch)")
+                      "battle.py — all 9 batteries (Sinhala + Devanagari + code-switch)")
         table.add_row("5", "Schema Check",
                       "DFA self-test: sinhala.json + devanagari.json")
         table.add_row("─" * 2, "─" * 28, "─" * 44)
@@ -138,7 +138,7 @@ class WWHOOrchestrator:
         self.console.rule("[bold blue]Step 2 — Evaluate[/bold blue]")
         c = self.config
         cmd = [
-            sys.executable, "tests/battle_v2.py",
+            sys.executable, "tests/battle.py",
             "--vocab_file", c.vocab_file,
             "--test_file",  c.test_file,
             "--only", "frontier",
@@ -162,7 +162,7 @@ class WWHOOrchestrator:
         self.console.rule("[bold blue]Step 4 — Tests (all 9 batteries)[/bold blue]")
         c = self.config
         cmd = [
-            sys.executable, "tests/battle_v2.py",
+            sys.executable, "tests/battle.py",
             "--vocab_file",  c.vocab_file,
             "--test_file",   c.test_file,
             "--full_corpus", c.test_file,
