@@ -1,0 +1,32 @@
+# WWHO — Unified Meta-Vocabulary Tokenizer
+
+## Introduction
+
+WWHO is a **hybrid tokenization system** designed to solve the challenges of processing multilingual text that includes both high-resource Latin scripts and complex Indic scripts (like Sinhala and Devanagari) within a single Large Language Model (LLM).
+
+The core innovation of WWHO is its **Meta-Vocabulary ID Space**, which unifies two distinct tokenization strategies without collision:
+
+1.  **tiktoken (OpenAI's `o200k_base`):** Handles Latin script, ASCII, code, digits, and emojis using a highly optimized BPE vocabulary (~200K tokens). This ensures state-of-the-art performance for English and programming languages.
+2.  **SGPE (Syllabic Grapheme-aware Pair Encoding):** Handles Indic scripts via a linguistically-informed BPE trained on top of DFA-based syllable segmentation. This prevents the "shattered token" problem common in byte-level BPEs when processing complex abugida scripts.
+
+## The Problem
+
+Standard BPE tokenizers (like GPT-4's) often fail to capture the linguistic structure of Indic scripts. They split characters at arbitrary byte boundaries, breaking conjunct consonants (e.g., `ක්‍ෂ`) into meaningless fragments. This leads to:
+*   **Inefficient tokenization:** More tokens per word, increasing inference cost and context window usage.
+*   **Poor model understanding:** The model struggles to learn the semantic meaning of broken character sequences.
+*   ** hallucinations:** The model may generate invalid character combinations.
+
+## The Solution
+
+WWHO addresses this by:
+*   **Syllabic Pre-tokenization:** Using a Deterministic Finite Automaton (DFA) to segment Indic text into valid syllables *before* applying BPE. This guarantees that tokens always respect linguistic boundaries.
+*   **Unified ID Space:** Mapping SGPE tokens to a range of IDs *after* the tiktoken vocabulary (e.g., `200,019` onwards), allowing a single model to seamlessly process mixed-script text.
+*   **Smart Routing:** A `CodeSwitchSegmenter` that dynamically routes text segments to the appropriate tokenizer (tiktoken or SGPE) based on script detection.
+
+## Key Features
+
+*   **Hybrid Architecture:** Best-of-breed tokenization for both Latin and Indic scripts.
+*   **Linguistic Integrity:** DFA-based segmentation ensures no broken conjuncts.
+*   **Efficient:** Comparable or better compression rates for Indic text compared to standard BPEs.
+*   **Extensible:** Uses JSON schemas to define DFA rules, making it easy to add support for other abugida scripts.
+*   **Compatibility:** Designed to export vocabularies compatible with Hugging Face tokenizers (via custom loading logic).

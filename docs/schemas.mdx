@@ -1,0 +1,80 @@
+# Schema Documentation
+
+WWHO uses **JSON Schemas** to define the Deterministic Finite Automata (DFA) that drive the linguistic tokenization. These schemas live in the `schemas/` directory and are loaded by `linguis_trie.py`.
+
+## Schema Structure
+
+A schema file (e.g., `sinhala.json`) has three main sections:
+
+1.  **Metadata:** Description of the language and script family.
+2.  **`char_classes`:** Mapping of Unicode characters to abstract class labels (e.g., `C` for Consonant).
+3.  **`dfa`:** Definition of states and transitions.
+
+### Example: `sinhala.json`
+
+```json
+{
+    "language": "sinhala",
+    "script_family": "abugida",
+    "grammar_notation": "C (H Z? C)* (P | H)? M? | V M?",
+    "char_classes": {
+        "C": {
+            "_description": "Consonants (vyanjana) U+0D9A–U+0DC6",
+            "ranges": [ ["0D9A", "0DC6"] ]
+        },
+        "V": {
+            "_description": "Independent vowels (svara)",
+            "codepoints": ["0D85", "0D86", ...]
+        },
+        "P": { "_description": "Dependent vowel signs (pili)" ... },
+        "H": { "_description": "Halant / Virama", "codepoints": ["0DCA"] },
+        "Z": { "_description": "Zero-Width Joiner", "codepoints": ["200D"] },
+        "M": { "_description": "Modifiers (anusvara)", "codepoints": ["0D82"] }
+    },
+    "dfa": {
+        "start": "START",
+        "accept_states": ["IN_CLUSTER", "IN_VOWEL", "ACCEPT", ...],
+        "emit_states": ["ORPHAN", "PASSTHROUGH"],
+        "transitions": {
+            "START": {
+                "C": "IN_CLUSTER",
+                "V": "IN_VOWEL",
+                "H": "ORPHAN",
+                ...
+            },
+            "IN_CLUSTER": {
+                "H": "HAL_SEEN",
+                "P": "PILI_SEEN",
+                "M": "ACCEPT",
+                "C": null  // null means invalid transition -> stop & emit
+            },
+            ...
+        }
+    }
+}
+```
+
+## Concepts
+
+### Character Classes
+
+*   **Ranges:** Define contiguous blocks of Unicode codepoints (hex strings).
+*   **Codepoints:** Explicit list of individual codepoints.
+*   **Labels:** Single-letter keys (like `C`, `V`, `P`) used in the DFA transitions.
+
+### DFA States
+
+*   **`start`:** The initial state of the tokenizer for a new token.
+*   **`accept_states`:** States where the accumulated buffer forms a valid token. If the tokenizer stops here, it emits the buffer.
+*   **`emit_states`:** States that force an immediate emission of the *current character* as a standalone token (e.g., punctuation or broken diacritics).
+*   **`transitions`:** A map of `Current State -> { Input Class -> Next State }`.
+    *   If a transition is `null`, it means the sequence is invalid, and the tokenizer should stop and backtrack to the last valid accept state.
+    *   If a character class is missing from the map, it defaults to an implicit rejection (stop).
+
+## Adding a New Language
+
+1.  Create a new JSON file in `schemas/` (e.g., `tamil.json`).
+2.  Define the `char_classes` specific to that script (Consonants, Vowels, Pulli, etc.).
+3.  Design the DFA state machine that accepts valid syllables.
+4.  Update `linguis_trie.py` to add a factory function (e.g., `build_tamil_linguis_trie()`).
+5.  Update `router.py` to detect the new script's Unicode block and route to the new trie.
