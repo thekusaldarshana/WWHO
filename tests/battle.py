@@ -407,7 +407,7 @@ def test_meta_vocab_roundtrip(
 
 
 
-def test_glitched_tokens_v2(enc_mixed, test_sentences: list[str]) -> TestResult:
+def test_glitched_tokens(enc_mixed, test_sentences: list[str]) -> TestResult:
     import collections
     from tqdm import tqdm
     from battle_core import time_limit, TestStatus, TestResult, ZWJ, HAL
@@ -454,7 +454,7 @@ def test_glitched_tokens_v2(enc_mixed, test_sentences: list[str]) -> TestResult:
     print(f"\n  Result: {status.value} — {details}")
     
     return TestResult(
-        name="Glitched Token Detection (v2)",
+        name="Glitched Token Detection",
         status=status,
         details=details,
         metrics={
@@ -466,10 +466,10 @@ def test_glitched_tokens_v2(enc_mixed, test_sentences: list[str]) -> TestResult:
     )
 
 
-def test_stratified_benchmarking_v2() -> TestResult:
+def test_stratified_benchmarking() -> TestResult:
     from battle_core import TestStatus, TestResult
     print("\n" + "=" * 80)
-    print("BATTERY 3: FRONTIER BENCHMARKING (V2 STRATIFIED)")
+    print("BATTERY 3: FRONTIER BENCHMARKING")
     print("=" * 80)
     
     import stratified_benchmark
@@ -483,14 +483,14 @@ def test_stratified_benchmarking_v2() -> TestResult:
         details = f"Benchmark crashed: {e}"
         
     return TestResult(
-        name="Frontier Benchmarking (Stratified)",
+        name="Frontier Benchmarking",
         status=status,
         details=details,
         metrics={},
     )
 
 
-def test_boundary_edge_cases_v2(enc_mixed) -> TestResult:
+def test_boundary_edge_cases(enc_mixed) -> TestResult:
     from battle_core import TestStatus, TestResult, LEADING_SPACE_CHAR
     print("\n" + "=" * 80)
     print("BATTERY 5: BOUNDARY & LEADING SPACE EDGE-CASES ")
@@ -532,16 +532,16 @@ def test_boundary_edge_cases_v2(enc_mixed) -> TestResult:
 
     status = TestStatus.PASS if not violations else TestStatus.FAIL
     print(f"\n  Result: {status.value} — Violations: {len(violations)}")
-    return TestResult("Boundary Edge-Cases (v2)", status, f"Violations: {len(violations)}", {}, violations)
+    return TestResult("Boundary Edge-Cases", status, f"Violations: {len(violations)}", {}, violations)
 
 
-def test_roundtrip_consistency_v2(
+def test_roundtrip_consistency(
     enc_mixed,
     test_sentences: list[str],
     full_corpus_path: Optional[str] = None,
     target_count: int = 1_000_000,
 ) -> TestResult:
-    """Battery 4 (v2): round-trip encode→decode over the mixed-script corpus.
+    """Battery 4: round-trip encode→decode over the mixed-script corpus.
     Uses WWHOMetaEncoder; resolves unk_id from the unified meta-vocab so we
     never crash on `sgpe.unk_id` which only exists on the V1 SGPEEncoder.
     """
@@ -628,7 +628,7 @@ def test_roundtrip_consistency_v2(
     )
     print(f"\n  Result: {status.value} — {details}")
     return TestResult(
-        name="Round-Trip Consistency (v2)",
+        name="Round-Trip Consistency",
         status=status,
         details=details,
         metrics={
@@ -643,7 +643,7 @@ def test_roundtrip_consistency_v2(
     )
 
 
-def test_zero_breakage_extended_v2(enc_mixed) -> TestResult:
+def test_zero_breakage_extended(enc_mixed) -> TestResult:
     from battle_core import test_zero_breakage_extended, TestStatus, TestResult
     
     print("\n" + "=" * 80)
@@ -697,7 +697,7 @@ def test_zero_breakage_extended_v2(enc_mixed) -> TestResult:
     print(f"\n  Result: {status.value} — Devanagari Violations: {len(violations)}")
     
     return TestResult(
-        name="Zero-Breakage Guarantee (v2 Devanagari)",
+        name="Zero-Breakage Guarantee",
         status=status,
         details=f"Violations: {len(violations)}",
         metrics={},
@@ -706,7 +706,7 @@ def test_zero_breakage_extended_v2(enc_mixed) -> TestResult:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SGPE v2.0.0 Battle Test Suite")
+    parser = argparse.ArgumentParser(description="WWHO Battle Test Suite")
     parser.add_argument("--vocab_file", type=str, default="output/vocab.json")
     parser.add_argument("--test_file", type=str, default="dataset/test.jsonl")
     parser.add_argument("--full_corpus", type=str, default=None)
@@ -768,24 +768,24 @@ def main():
         report.add(test_linguistic_complexity(sgpe))
 
     if should_run("glitched"):
-        report.add(test_glitched_tokens_v2(enc_mixed, test_sentences))
+        report.add(test_glitched_tokens(enc_mixed, test_sentences))
 
     if should_run("frontier"):
-        report.add(test_stratified_benchmarking_v2())
+        report.add(test_stratified_benchmarking())
 
     if should_run("roundtrip") and not args.skip_roundtrip:
-        report.add(test_roundtrip_consistency_v2(
+        report.add(test_roundtrip_consistency(
             enc_mixed, test_sentences,
             full_corpus_path=args.full_corpus,
             target_count=args.roundtrip_count,
         ))
 
     if should_run("boundary"):
-        report.add(test_boundary_edge_cases_v2(enc_mixed))
+        report.add(test_boundary_edge_cases(enc_mixed))
 
     if should_run("zerobreak"):
         report.add(test_zero_breakage_extended(sgpe))
-        report.add(test_zero_breakage_extended_v2(enc_mixed))
+        report.add(test_zero_breakage_extended(enc_mixed))
 
     # ── New Multi-Script Batteries ───────────────────────────────────────────
     if should_run("devanagari"):
